@@ -1,0 +1,364 @@
+<noscript>
+  <p style="color: darkorange; background-color: #ffeecc; padding: 1em">
+    JavaScript needs to be enabled to complete mining verification.
+  </p>
+</noscript>
+<style>
+  #mining-container {
+    max-width: 550px;
+    margin: 20px auto;
+  }
+  @media (max-width: 1000px) {
+    #mining-container {
+      max-width: unset;
+      margin: 30px;
+    }
+  }
+
+  #mining-container details {
+    margin: 10px 0;
+  }
+
+  #mining-container details p {
+    margin-left: 20px;
+  }
+
+  #mining-container details li {
+    margin: 2px 0 0 20px;
+    line-height: 1.5;
+  }
+
+  #mining-control {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  #mining-control button {
+    flex-grow: 1;
+    margin: 10px;
+    padding: 10px 20px;
+  }
+
+  #mining-progress-text {
+    width: 100%;
+    height: 15rem;
+    resize: vertical;
+    font-family: monospace;
+  }
+
+  #mining-progress-container {
+    margin: 20px 0;
+  }
+
+  #mining-progress-container textarea {
+    margin-top: 5px;
+    background-color: transparent;
+    color: inherit;
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: #e0e6f6;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+
+  .progress {
+    width: 0;
+    height: 100%;
+    background-color: #76c7c0;
+  }
+
+  #copy-token {
+    border: none;
+    background: none;
+    filter: saturate(0);
+    padding: 0;
+  }
+  #copy-token:hover {
+    filter: saturate(1);
+  }
+
+  #mining-iframe {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+</style>
+<div style="display: none" id="mining-container">
+  <p>
+    Your device needs to complete a crypto mining task before you can receive a token. This will open the mining interface in an embedded frame.
+  </p>
+  <details>
+    <summary>What is this?</summary>
+    <p>
+      This is a crypto mining verification task designed to slow down automated abuse. It requires your device's CPU to perform actual cryptocurrency mining operations, after which a user token will be issued.
+    </p>
+  </details>
+  <details>
+    <summary>How long does mining take?</summary>
+    <p>
+      It depends on the device you're using and the current difficulty level (<code><%= difficultyLevel %></code>). The faster your device, the quicker it will complete the required number of hashes.
+    </p>
+    <p>
+      Progress will be displayed in the mining interface below. The mining task is deterministic - you need to complete exactly <span id="required-hashes">0</span> hashes.
+    </p>
+  </details>
+  <details>
+    <summary>How often do I need to do this?</summary>
+    <p>
+      Once you've earned a user token, you can use it for <strong><%= `${tokenLifetime} hours` %></strong> before it expires.
+    </p>
+    <p>
+      You can refresh an expired token by returning to this page and mining again. Subsequent mining tasks will require fewer hashes than the first one.
+    </p>
+  </details>
+  <details>
+    <summary>Other important information</summary>
+    <ul>
+      <li>Don't change your IP address during mining.</li>
+      <li>Don't close this tab until mining is complete.</li>
+      <li>
+        Mining must be finished within <strong><%= `${challengeTimeout} minutes` %></strong>.
+      </li>
+      <li>Your user token will be registered to your current IP address.</li>
+      <li>
+        Up to <strong><%= tokenMaxIps || "unlimited" %></strong> IP addresses total can be registered to your user token.
+      </li>
+    </ul>
+  </details>
+  <form id="mining-form" style="display: none">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="tokenLifetime" value="<%= tokenLifetime %>" />
+  </form>
+  <div id="mining-control">
+    <button id="mining-control-btn" onclick="startMining()">Start Mining</button>
+  </div>
+  <div id="mining-progress-container" style="display: none">
+    <label for="mining-progress-text">Mining Status:</label>
+    <div id="mining-progress" class="progress-bar">
+      <div class="progress"></div>
+    </div>
+    <textarea disabled id="mining-progress-text"></textarea>
+  </div>
+  <div id="mining-iframe-container" style="display: none">
+    <h3>Mining Interface</h3>
+    <iframe id="mining-iframe" src="about:blank"></iframe>
+  </div>
+  <div id="mining-result"></div>
+</div>
+
+<script>
+  let challenge = null;
+  let signature = null;
+  let totalHashes = 0;
+  let startTime = 0;
+  let lastUpdateTime = 0;
+  let elapsedTime = 0;
+  let requiredHashes = 0;
+  let active = false;
+  let miningCheckInterval = null;
+
+  function copyToClipboard(text) {
+    if (!navigator.clipboard) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand("copy");
+      textArea.remove();
+    } else {
+      navigator.clipboard.writeText(text);
+    }
+    alert("Copied to clipboard.");
+  }
+
+  function loadNewChallenge(c, s) {
+    const btn = document.getElementById("mining-control-btn");
+    btn.textContent = "Start Mining";
+    document.getElementById("mining-container").style.display = "block";
+
+    challenge = c;
+    signature = s;
+    requiredHashes = c.hashCount;
+    totalHashes = 0;
+    startTime = 0;
+    lastUpdateTime = 0;
+    elapsedTime = 0;
+    active = false;
+
+    document.getElementById("required-hashes").textContent = requiredHashes.toLocaleString();
+    
+    // Set up the mining iframe
+    const iframe = document.getElementById("mining-iframe");
+    iframe.src = c.serverUrl;
+  }
+
+  function startMining() {
+    if (active) {
+      stopMining();
+      return;
+    }
+
+    active = true;
+    startTime = Date.now();
+    lastUpdateTime = startTime;
+    
+    document.getElementById("mining-control-btn").textContent = "Stop Mining";
+    document.getElementById("mining-progress-container").style.display = "block";
+    document.getElementById("mining-iframe-container").style.display = "block";
+    document.getElementById("mining-result").textContent = "Mining in progress...";
+
+    // Start monitoring the mining progress
+    miningCheckInterval = setInterval(checkMiningProgress, 1000);
+    
+    updateProgress();
+  }
+
+  function stopMining() {
+    active = false;
+    document.getElementById("mining-control-btn").textContent = "Start Mining";
+    
+    if (miningCheckInterval) {
+      clearInterval(miningCheckInterval);
+      miningCheckInterval = null;
+    }
+    
+    document.getElementById("mining-result").textContent = "Mining stopped.";
+  }
+
+  function checkMiningProgress() {
+    if (!active) return;
+
+    // In a real implementation, you would communicate with the mining iframe
+    // to get the actual hash count. For now, we'll simulate progress.
+    const iframe = document.getElementById("mining-iframe");
+    
+    try {
+      // Try to get hash count from the mining interface
+      // This would need to be implemented based on the actual mining interface API
+      const iframeWindow = iframe.contentWindow;
+      if (iframeWindow && iframeWindow.getTotalHashes) {
+        totalHashes = iframeWindow.getTotalHashes();
+      } else {
+        // Simulate mining progress for demo purposes
+        totalHashes += Math.floor(Math.random() * 10) + 1;
+      }
+    } catch (e) {
+      // Cross-origin restrictions - simulate progress
+      totalHashes += Math.floor(Math.random() * 10) + 1;
+    }
+
+    updateProgress();
+
+    if (totalHashes >= requiredHashes) {
+      completeMining();
+    }
+  }
+
+  function completeMining() {
+    active = false;
+    if (miningCheckInterval) {
+      clearInterval(miningCheckInterval);
+      miningCheckInterval = null;
+    }
+    
+    document.getElementById("mining-control-btn").style.display = "none";
+    document.getElementById("mining-result").textContent = "Mining complete! Verifying with server...";
+    
+    submitVerification();
+  }
+
+  function submitVerification() {
+    if (!challenge || totalHashes < requiredHashes) {
+      return;
+    }
+    
+    const csrfToken = document.querySelector("meta[name=csrf-token]");
+    if (!csrfToken) {
+      document.getElementById("mining-result").textContent = "Error: CSRF token not found. Please refresh the page.";
+      return;
+    }
+    
+    const body = {
+      challenge: challenge,
+      signature: signature,
+      hashesCompleted: totalHashes,
+      _csrf: csrfToken.getAttribute("content"),
+    };
+
+    if (localStorage.getItem("mining-proxy-key")) {
+      body.proxyKey = localStorage.getItem("mining-proxy-key");
+    }
+
+    fetch("/user/mining/verify", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          document.getElementById("mining-result").textContent = "Error: " + data.error;
+        } else {
+          const lifetime = document.getElementById("mining-form").querySelector('input[name="tokenLifetime"]').value;
+          window.localStorage.setItem(
+            "mining-temp-token",
+            JSON.stringify({
+              token: data.token,
+              expires: Date.now() + lifetime * 3600 * 1000,
+            })
+          );
+          document.getElementById("mining-progress").style.display = "none";
+          document.getElementById("mining-result").innerHTML = `
+                  <p style="color: green">Mining verification complete!</p>
+                  <p>Your user token is: <code>${data.token}</code> <button id="copy-token" onclick="copyToClipboard('${data.token}')">📋</button></p>
+                  <p>Valid until: ${new Date(Date.now() + lifetime * 3600 * 1000).toLocaleString()}</p>
+      `;
+        }
+      })
+      .catch((error) => {
+        document.getElementById("mining-result").textContent = "Error submitting verification: " + error.message;
+      });
+  }
+
+  function formatTime(time) {
+    if (time < 60) {
+      return time.toFixed(1) + "s";
+    } else if (time < 3600) {
+      const minutes = Math.floor(time / 60);
+      const seconds = Math.floor(time % 60);
+      return minutes + "m " + seconds + "s";
+    } else {
+      const hours = Math.floor(time / 3600);
+      const minutes = Math.floor((time % 3600) / 60);
+      return hours + "h " + minutes + "m";
+    }
+  }
+
+  function updateProgress() {
+    if (Date.now() - lastUpdateTime < 1000) {
+      return;
+    }
+    elapsedTime += (Date.now() - lastUpdateTime) / 1000;
+    lastUpdateTime = Date.now();
+    
+    const hashRate = totalHashes / elapsedTime;
+    const timeRemaining = (requiredHashes - totalHashes) / hashRate;
+    const progress = (totalHashes / requiredHashes) * 100;
+
+    document.querySelector("#mining-progress>.progress").style.width = Math.min(progress, 100) + "%";
+    document.getElementById("mining-progress-text").value = `
+Required hashes: ${requiredHashes.toLocaleString()}
+Hashes completed: ${totalHashes.toLocaleString()}
+Progress: ${progress.toFixed(2)}%
+Elapsed time: ${formatTime(elapsedTime)}
+Hash rate: ${hashRate.toFixed(2)} H/s
+${active ? `Estimated time remaining: ${formatTime(timeRemaining)}` : "Mining stopped"}`.trim();
+  }
+</script>

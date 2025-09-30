@@ -76,7 +76,7 @@ function transformAwsTextResponseToOpenAI(
 }
 
 const awsClaudeProxy = createQueuedProxyMiddleware({
-  target: "http://107.174.221.205:3000",
+  target: "http://107.174.140.107:3000",
   mutations: [signAwsRequest, finalizeSignedRequest],
   blockingResponseHandler: awsBlockingResponseHandler,
 });

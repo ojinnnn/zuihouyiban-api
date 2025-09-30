@@ -24,7 +24,7 @@ const handleModelRequest: RequestHandler = async (req, res) => {
     
     const response = await new Promise((resolve, reject) => {
       const options = {
-        hostname: '107.174.221.205',
+        hostname: '107.174.140.107',
         port: 3000,
         path: '/v1/models',
         method: 'GET',
@@ -78,7 +78,7 @@ function selectUpstreamPath(manager: ProxyReqManager) {
 }
 
 const googleAIProxy = createQueuedProxyMiddleware({
-  target: "http://107.174.221.205:3000",
+  target: "http://107.174.140.107:3000",
   mutations: [addKey, selectUpstreamPath, finalizeBody],
   blockingResponseHandler: googleAIBlockingResponseHandler,
 });

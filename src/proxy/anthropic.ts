@@ -24,7 +24,7 @@ const handleModelRequest: RequestHandler = async (req, res) => {
     const http = require('http');
     const url = require('url');
     
-    const parsedUrl = url.parse('http://107.174.221.205:3000/v1/models');
+    const parsedUrl = url.parse('http://107.174.140.107:3000/v1/models');
     const client = parsedUrl.protocol === 'https:' ? https : http;
     const key = config.anthropicKey?.split(",")[0];
     
@@ -181,7 +181,7 @@ function selectUpstreamPath(manager: ProxyReqManager) {
 }
 
 const anthropicProxy = createQueuedProxyMiddleware({
-  target: "http://107.174.221.205:3000",
+  target: "http://107.174.140.107:3000",
   mutations: [addKey, selectUpstreamPath, finalizeBody],
   blockingResponseHandler: anthropicBlockingResponseHandler,
 });

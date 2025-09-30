@@ -11,8 +11,8 @@ WORKDIR /app
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
 
-# 安装依赖
-RUN npm install --only=production
+# 安装所有依赖 (包括构建所需的 devDependencies)
+RUN npm install
 
 # 复制源代码
 COPY . .

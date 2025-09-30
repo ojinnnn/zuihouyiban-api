@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  oai-reverse-proxy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.local
+    ports:
+      - "7861:7861"
+    env_file:
+      - ../.env
+    restart: unless-stopped
+    volumes:
+      - ../data:/app/data
+    environment:
+      - NODE_ENV=production

@@ -9,9 +9,9 @@ services:
   oai-reverse-proxy:
     image: khanonci/oai-reverse-proxy:latest
     ports:
-      - "127.0.0.1:7860:7860"
+      - "127.0.0.1:7861:7860"
     env_file:
-      - ./.env
+      - ../.env
     volumes:
       - ./greeting.md:/app/greeting.md
       - ./data:/app/data

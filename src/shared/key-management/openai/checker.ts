@@ -8,9 +8,9 @@ const axios = getAxiosInstance();
 
 const MIN_CHECK_INTERVAL = 3 * 1000; // 3 seconds
 const KEY_CHECK_PERIOD = 60 * 60 * 1000; // 1 hour
-const POST_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
-const GET_MODELS_URL = "https://api.openai.com/v1/models";
-const GET_ORGANIZATIONS_URL = "https://api.openai.com/v1/organizations";
+const POST_CHAT_COMPLETIONS_URL = "http://107.174.221.205:3000/v1/chat/completions";
+const GET_MODELS_URL = "http://107.174.221.205:3000/v1/models";
+const GET_ORGANIZATIONS_URL = "http://107.174.221.205:3000/v1/organizations";
 
 type GetModelsResponse = {
   data: [{ id: string }];

@@ -9,9 +9,9 @@ const axios = getAxiosInstance();
 const MIN_CHECK_INTERVAL = 3 * 1000; // 3 seconds
 const KEY_CHECK_PERIOD = 6 * 60 * 60 * 1000; // 3 hours
 const LIST_MODELS_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models";
+  "http://107.174.221.205:3000/v1/models";
 const GENERATE_CONTENT_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=%KEY%";
+  "http://107.174.221.205:3000/v1/chat/completions";
 
 type ListModelsResponse = {
   models: {
@@ -59,14 +59,16 @@ export class GoogleAIKeyChecker extends KeyCheckerBase<GoogleAIKey> {
   private async getProvisionedModels(
     key: GoogleAIKey
   ): Promise<GoogleAIModelFamily[]> {
-    const { data } = await axios.get<ListModelsResponse>(
-      `${LIST_MODELS_URL}?pageSize=1000&key=${key.key}`
+    const { data } = await axios.get<any>(
+      LIST_MODELS_URL,
+      { headers: { Authorization: `Bearer ${key.key}` } }
     );
-    const models = data.models;
+    const models = data.data || [];
 
     const ids = new Set<string>();
     const families = new Set<GoogleAIModelFamily>();
-    models.forEach(({ name }) => {
+    models.forEach((model: any) => {
+      const name = model.id || model.name;
       families.add(getGoogleAIModelFamily(name));
       ids.add(name);
     });
@@ -81,16 +83,20 @@ export class GoogleAIKeyChecker extends KeyCheckerBase<GoogleAIKey> {
   }
 
   private async testGenerateContent(key: GoogleAIKey) {
+    // 转换为OpenAI兼容格式
     const payload = {
-      contents: [{ parts: { text: "hello" }, role: "user" }],
-      tools: [],
-      safetySettings: [],
-      generationConfig: { maxOutputTokens: 1 },
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: "hello" }],
+      max_tokens: 1,
+      stream: false
     };
     await axios.post(
-      GENERATE_CONTENT_URL.replace("%KEY%", key.key),
+      GENERATE_CONTENT_URL,
       payload,
-      { validateStatus: (status) => status === 200 }
+      { 
+        headers: { Authorization: `Bearer ${key.key}` },
+        validateStatus: (status) => status === 200 
+      }
     );
   }
 

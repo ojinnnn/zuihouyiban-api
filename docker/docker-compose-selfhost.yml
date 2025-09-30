@@ -7,11 +7,14 @@
 version: '3.8'
 services:
   oai-reverse-proxy:
-    image: khanonci/oai-reverse-proxy:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.local
     ports:
-      - "127.0.0.1:7861:7860"
+      - "127.0.0.1:7861:7861"
     env_file:
       - ../.env
     volumes:
-      - ./greeting.md:/app/greeting.md
-      - ./data:/app/data
+      - ../greeting.md:/app/greeting.md
+      - ../data:/app/data
+    restart: unless-stopped

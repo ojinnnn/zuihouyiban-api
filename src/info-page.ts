@@ -48,9 +48,19 @@ const MODEL_FAMILY_FRIENDLY_NAME: { [f in ModelFamily]: string } = {
 };
 
 const converter = new showdown.Converter();
-const customGreeting = fs.existsSync("greeting.md")
-  ? `<div id="servergreeting">${fs.readFileSync("greeting.md", "utf8")}</div>`
-  : "";
+let customGreeting = "";
+try {
+  // Check if greeting.md exists and is a file before reading.
+  const stat = fs.statSync("greeting.md");
+  if (stat.isFile()) {
+    customGreeting = `<div id="servergreeting">${fs.readFileSync(
+      "greeting.md",
+      "utf8"
+    )}</div>`;
+  }
+} catch (e) {
+  // Silently ignore if file doesn't exist or is a directory.
+}
 let infoPageHtml: string | undefined;
 let infoPageLastUpdated = 0;
 
